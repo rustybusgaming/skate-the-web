@@ -247,7 +247,6 @@ fn prepare(inputs: Inputs, stage: Arc<AtomicU8>) -> Result<PreparedWorld, String
     let (physics, skater, controls, camera, simulation_time, render_time) = {
         let simulation_started = Instant::now();
         let (physics, skater, controls, camera) = simulate(&stage)?;
-        drop(simulate);
         let simulation_time = simulation_started.elapsed();
         stage.store(3, Ordering::Relaxed);
         let render_started = Instant::now();
