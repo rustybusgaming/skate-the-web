@@ -1,5 +1,18 @@
 use super::*;
 
+#[test]
+fn gap_callouts_format_drop_step_up_and_high_gap_in_feet() {
+    assert_eq!(
+        gap_callouts(-5.76, 5.85),
+        vec!["Drop 18.9 ft".to_owned(), "High Gap 19.2 ft".to_owned()]
+    );
+    assert_eq!(
+        gap_callouts(2.926, 0.8),
+        vec!["Step-Up 9.6 ft".to_owned()]
+    );
+    assert!(gap_callouts(0.4, 1.4).is_empty());
+}
+
 fn frame(tick: u32, category: FilteredCategory, descriptor: Option<AttributeName>) -> Frame {
     Frame {
         tick,

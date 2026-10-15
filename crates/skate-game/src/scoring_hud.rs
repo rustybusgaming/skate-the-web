@@ -134,6 +134,9 @@ fn humanize_trick_id(id: &str) -> String {
 }
 
 pub(crate) struct ScoringHudPlugin;
+#[derive(Component)]
+struct GapCalloutText;
+
 impl Plugin for ScoringHudPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "hud_render.wgsl");
@@ -142,6 +145,7 @@ impl Plugin for ScoringHudPlugin {
             Material2dPlugin::<HudMaterial>::default(),
             UiMaterialPlugin::<HudComposite>::default(),
         ))
+        .add_systems(Startup, spawn_gap_callouts)
         .add_systems(
             PostStartup,
             setup.after(crate::graphics_menu::PresentationSetup),
@@ -157,9 +161,61 @@ impl Plugin for ScoringHudPlugin {
             (resize_target, reset, render)
                 .chain()
                 .after(crate::app::FrameSet::Physics),
+        )
+        .add_systems(
+            Update,
+            update_gap_callouts.after(crate::app::FrameSet::Physics),
         );
     }
 }
+
+fn spawn_gap_callouts(mut commands: Commands) {
+    commands.spawn((
+        GapCalloutText,
+        Text::new(""),
+        TextFont {
+            font_size: 16.,
+            ..default()
+        },
+        TextColor(Color::srgb(0.88, 0.9, 0.92)),
+        Node {
+            position_type: PositionType::Absolute,
+            left: percent(4.5),
+            top: percent(50.),
+            padding: UiRect::axes(px(7), px(4)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.02, 0.03, 0.04, 0.38)),
+        GlobalZIndex(5),
+        Visibility::Hidden,
+        Name::new("Gap callouts"),
+    ));
+}
+
+fn update_gap_callouts(
+    skater: Res<SkaterRuntime>,
+    menu: Option<Res<crate::graphics_menu::Menu>>,
+    mut labels: Query<(&mut Text, &mut Visibility), With<GapCalloutText>>,
+) {
+    let text = skater.scoring.gap_hud_text();
+    let hidden = text.is_empty()
+        || menu.is_some_and(|menu| !menu.show_hud())
+        || crate::object_dropper::is_open();
+    for (mut label, mut visibility) in &mut labels {
+        if label.0 != text {
+            label.0.clone_from(&text);
+        }
+        let wanted = if hidden {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+        if *visibility != wanted {
+            *visibility = wanted;
+        }
+    }
+}
+
 fn setup(
     mut commands: Commands,
     config: Res<Config>,

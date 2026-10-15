@@ -11,6 +11,7 @@ use skate_core::{
     },
 };
 use skate_data::{collections::Collections, scoring::ScoringData};
+use std::collections::VecDeque;
 
 #[path = "scoring_runtime/display.rs"]
 mod display;
@@ -102,6 +103,7 @@ pub(crate) struct Runtime {
     pub(crate) landed_spin_degrees: i32,
     pub(crate) landed_clean: bool,
     pub(crate) landed_sketchy: bool,
+    gap_callouts: VecDeque<(String, f32)>,
     /// The first air trick of the sequence in progress, and of the last
     /// landed one (S.K.A.T.E. sets and copies these).
     air_trick: Option<AirTrick>,
@@ -116,6 +118,23 @@ pub(crate) struct Runtime {
     pub modified_trick: bool,
     pub close_tricks: bool,
 }
+
+fn gap_callouts(vertical: f32, high: f32) -> Vec<String> {
+    const FEET_PER_METRE: f32 = 3.28084;
+    const VERTICAL_GAP_MIN: f32 = 0.5;
+    const HIGH_GAP_MIN: f32 = 1.5;
+    let mut labels = Vec::with_capacity(2);
+    if vertical <= -VERTICAL_GAP_MIN {
+        labels.push(format!("Drop {:.1} ft", -vertical * FEET_PER_METRE));
+    } else if vertical >= VERTICAL_GAP_MIN {
+        labels.push(format!("Step-Up {:.1} ft", vertical * FEET_PER_METRE));
+    }
+    if high >= HIGH_GAP_MIN {
+        labels.push(format!("High Gap {:.1} ft", high * FEET_PER_METRE));
+    }
+    labels
+}
+
 impl Runtime {
     pub fn load(data: &Collections) -> Result<Self, String> {
         Ok(Self {
@@ -158,6 +177,7 @@ impl Runtime {
             landed_score: 0.,
             landed_base: String::new(), landed_spin_degrees: 0,
             landed_clean: false, landed_sketchy: false,
+            gap_callouts: VecDeque::new(),
             air_trick: None, landed_air: None,
             bail_seq: 0,
             settled_trick_seq: 0,
@@ -187,6 +207,13 @@ impl Runtime {
     }
     pub(crate) fn multiplier(&self) -> f32 {
         self.session.combo.multiplier
+    }
+    pub(crate) fn gap_hud_text(&self) -> String {
+        self.gap_callouts
+            .iter()
+            .map(|(label, _)| label.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
     pub(crate) fn line_time(&self) -> f32 {
         let drain = self.data.line_drain.max(1e-4);
@@ -425,6 +452,14 @@ impl Runtime {
         Ok(())
     }
     pub fn advance(&mut self, f: Frame) -> Result<(), String> {
+        if f.teleported {
+            self.gap_callouts.clear();
+        } else {
+            for (_, remaining) in &mut self.gap_callouts {
+                *remaining -= f.dt;
+            }
+            self.gap_callouts.retain(|(_, remaining)| *remaining > 0.);
+        }
         let bailing = f.category == FilteredCategory::Wipeout;
         if bailing && !self.was_bailing {
             self.bail_seq = self.bail_seq.saturating_add(1);
@@ -464,12 +499,23 @@ impl Runtime {
             next = Collector::None;
         }
         if next != self.collector {
+            if self.collector == Collector::Air && next == Collector::Ground && !f.teleported {
+                let vertical = f.position[1] - self.start[1];
+                let high = self.peak - self.start[1];
+                for label in gap_callouts(vertical, high) {
+                    if self.gap_callouts.len() == 3 {
+                        self.gap_callouts.pop_front();
+                    }
+                    self.gap_callouts.push_back((label, 3.5));
+                }
+            }
             if self.collector == Collector::Air {
                 bevy::log::info!(target: "scoring", "SCORING_AIR_REWARDS tick={} trick={:?} carrier={:?} spin_degrees={} body_flip={} metrics={:?} air_factor={} repetition={}", f.tick, self.trick_name,
                     self.carriers[0].as_ref().map(|c| (c.scorable.id, c.reward, c.announced)),
                     self.spin.to_degrees(), self.body_flip_count, self.air_metrics, self.air_factor, self.air_repetition);
                 bevy::log::info!(target: "scoring", "SCORING_AIR_EXIT tick={} state={} preview={} multiplier={} line_points={} combo_points={} landing_valid={} landing_type={} switch={} fakie={}", f.tick, f.state, self.sequence_score, self.session.combo.multiplier, self.session.line.points, self.session.combo.timer.points, f.landing.landing_data_167, f.landing.landing_type_96, f.switch, f.fakie);
             }
+
             let complete = next != Collector::None;
             let previous_type = self
                 .carriers

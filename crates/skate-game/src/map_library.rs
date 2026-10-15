@@ -26,6 +26,7 @@ fn world_name(stem: &str) -> String {
         "downtownskatepark" => "Downtown Skate Park",
         "industrialskatepark" => "Industrial Skate Park",
         "startpark" => "Start Park",
+        "hawaiiandream" => "Hawaiian Dream",
         _ => return stem.replace('_', " "),
     }
     .into()
@@ -90,6 +91,12 @@ pub(crate) fn save_default(assets: &Path, map: Option<&Path>) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hawaiian_dream_map_has_a_friendly_menu_name() {
+        assert_eq!(world_name("HawaiianDream"), "Hawaiian Dream");
+    }
+
     #[test]
     fn default_pointer_round_trips_map_and_explicit_test_world() {
         let root = std::env::temp_dir().join(format!("skate-map-pointer-{}", std::process::id()));
