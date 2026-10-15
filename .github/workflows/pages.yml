@@ -50,10 +50,9 @@ jobs:
         shell: pwsh
         run: ./scripts/build-web.ps1 -Profile web
 
-      - name: Configure optional game-data pack
-        if: ${{ vars.SKATE_CLIENT_PACK_URL != '' }}
+      - name: Configure game-data pack
         env:
-          SKATE_CLIENT_PACK_URL: ${{ vars.SKATE_CLIENT_PACK_URL }}
+          SKATE_CLIENT_PACK_URL: ${{ vars.SKATE_CLIENT_PACK_URL || 'https://gamedata.xposed.wtf/skate3-game-data.zip' }}
         shell: bash
         run: |
           node -e 'require("fs").writeFileSync("dist/config.json", JSON.stringify({ pack: process.env.SKATE_CLIENT_PACK_URL, fallback: false }) + "\n")'

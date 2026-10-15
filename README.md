@@ -65,15 +65,15 @@ The **Deploy web to GitHub Pages** workflow publishes the browser client from
 Actions** as the source. The page contains the client only; it does not upload
 or include Skate 3 game data.
 
-To have the page load your own converted game-data ZIP, set the repository
-Actions variable `SKATE_CLIENT_PACK_URL` to its public HTTPS URL. The ZIP host
-must allow browser CORS requests and byte-range reads. This URL is embedded in
-the public Pages site, so do not put credentials or private tokens in it. With
-the variable unset, the client can still be pointed at a game-data server or a
-ZIP URL from the page's game-server settings.
+The Pages workflow uses the same default game-data ZIP as `scripts/game-data-pack.js`.
+To use a different converted game-data ZIP, set the repository Actions variable
+`SKATE_CLIENT_PACK_URL` to its public HTTPS URL. The ZIP host must allow browser
+CORS requests and byte-range reads. This URL is embedded in the public Pages
+site, so do not put credentials or private tokens in it. You can also point the
+client at a game-data server or another ZIP URL under ONLINE > Game Server.
 Solo play does not require multiplayer. The game-server setting only tells the
 browser where to read game files; no multiplayer session needs to be hosted or
-joined. The browser client still needs your own converted game data.
+joined. The browser client needs access to converted game data.
 
 ## Build
 
