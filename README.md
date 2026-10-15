@@ -71,6 +71,9 @@ must allow browser CORS requests and byte-range reads. This URL is embedded in
 the public Pages site, so do not put credentials or private tokens in it. With
 the variable unset, the client can still be pointed at a game-data server or a
 ZIP URL from the page's game-server settings.
+Solo play does not require multiplayer. The game-server setting only tells the
+browser where to read game files; no multiplayer session needs to be hosted or
+joined. The browser client still needs your own converted game data.
 
 ## Build
 

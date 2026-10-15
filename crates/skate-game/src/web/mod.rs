@@ -44,6 +44,16 @@ pub(crate) fn set_trackpad(level: u8, playing: bool) {
     host::set_trackpad(u32::from(level), playing);
 }
 
+/// Take one queued music-player action from the page.
+pub(crate) fn take_music_command() -> String {
+    host::take_music_command()
+}
+
+/// Keep the page's music controls in sync with the active soundtrack.
+pub(crate) fn music_status(title: &str, paused: bool, available: bool) {
+    host::music_status(title, paused, available);
+}
+
 /// A file's download progress: (bytes, total, seconds since bytes arrived).
 pub(crate) fn download_status(path: &str) -> Option<(f64, f64, f64)> {
     host::download_status(path)

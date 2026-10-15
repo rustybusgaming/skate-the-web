@@ -539,12 +539,20 @@ function counted(response, progress) {
 export async function manifest(reload = false) {
   const base = origin();
   if (!reload && cached && cached.base === base && Date.now() - cached.at < 5000) return cached.files;
-  const response = await fetch(`${base}/manifest.json`, { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`No file list at ${base}/manifest.json (HTTP ${response.status}).`);
-  let files = await response.json();
-  if (!Array.isArray(files)) throw new Error(`${base}/manifest.json is not a list of files.`);
-  // The server lists what it holds (custom characters); the pack, the game.
   const pack = await gamePack();
+  const response = await fetch(`${base}/manifest.json`, { cache: 'no-cache' });
+  let files = [];
+  if (response.ok) {
+    files = await response.json();
+    if (!Array.isArray(files)) throw new Error(`${base}/manifest.json is not a list of files.`);
+  } else if (!(response.status === 404 && pack)) {
+    if (response.status === 404 && !pack && base === location.origin && location.hostname.endsWith('.github.io')) {
+      throw new Error('Solo play does not require multiplayer, but it does need Skate 3 game data. GitHub Pages only serves the browser client. Set the repository Actions variable SKATE_CLIENT_PACK_URL to your converted game-data ZIP, or use a game-data server under ONLINE > Game Server (this is only for files; you do not need to join a multiplayer session).');
+    }
+    throw new Error(`No file list at ${base}/manifest.json (HTTP ${response.status}).`);
+  }
+  // On static hosting the pack is the file list; a server manifest adds any
+  // shared custom characters when one is available.
   if (pack) {
     const own = new Set(files.map((file) => file && file.path));
     files = [...pack.list().filter((file) => !own.has(file.path)), ...files];

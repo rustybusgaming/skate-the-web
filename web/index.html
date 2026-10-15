@@ -319,6 +319,19 @@
   body.in-game.paused #donate { top: 108px; right: 12px; }
   body.in-game.paused #coffee { top: 152px; right: 12px; }
   @media (max-width: 720px) { #donate span, #coffee span { display: none; } #donate { padding: 8px; top: 56px; } #coffee { padding: 8px; top: 96px; } }
+  #music-player { position: fixed; z-index: 7; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+    display: flex; align-items: center; gap: 6px; max-width: min(420px, calc(100vw - 28px)); padding: 7px 9px;
+    border: 1px solid rgba(120, 190, 230, .3); border-radius: 6px; background: rgba(4, 9, 14, .86);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  #music-player[hidden] { display: none; }
+  #music-player button { flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px;
+    background: transparent; color: #e8f6ff; font: 700 16px/1 system-ui, sans-serif; cursor: pointer; }
+  #music-player button:hover, #music-player button:focus-visible { background: rgba(54, 179, 255, .2); outline: 1px solid #36b3ff; }
+  #music-player #music-toggle { background: #12304a; color: #fff; }
+  #music-track { min-width: 0; padding: 0 5px; color: #d7e9f4; font: 600 12px/1.2 system-ui, sans-serif;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #music-track::before { content: 'NOW PLAYING'; display: block; margin-bottom: 3px; color: #7f9fb3; font: 700 9px/1 system-ui, sans-serif; letter-spacing: .1em; }
+  @media (max-width: 720px) { #music-player { max-width: calc(100vw - 24px); } #music-player button { width: 30px; } }
 </style>
 </head>
 <body>
@@ -377,6 +390,12 @@
 <a id="discord" href="https://discord.gg/EKF8gZnZGe" target="_blank" rel="noopener noreferrer" title="Join the Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.11 13.11 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg><span>Discord</span></a>
 <a id="donate" href="https://pump.fun/coin/BZDShqTtTL5EAk38RYSrFUfYM1YBZT4zqRajQz1Wpump" target="_blank" rel="noopener noreferrer" title="Donate"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span>Donate</span></a>
 <a id="coffee" href="https://buymeacoffee.com/aaddpp" target="_blank" rel="noopener noreferrer" title="Buy Me a Coffee"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 3h13a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3h-.3l-.6 6.1A3 3 0 0 1 13.1 20H7.9a3 3 0 0 1-3-2.9L4 7V3zm2 2v2l.9 10.3a1 1 0 0 0 1 .7h5.2a1 1 0 0 0 1-.7L15 7V5H6zm11 2v2a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1v2z"/></svg><span>Buy Me a Coffee</span></a>
+<aside id="music-player" aria-label="Music player" hidden>
+  <button id="music-previous" type="button" aria-label="Previous track" title="Previous track">|◀</button>
+  <button id="music-toggle" type="button" aria-label="Pause music" title="Pause music">Ⅱ</button>
+  <button id="music-next" type="button" aria-label="Next track" title="Next track">▶|</button>
+  <span id="music-track" aria-live="polite"></span>
+</aside>
 <script type="module" src="./main.js"></script>
 </body>
 </html>

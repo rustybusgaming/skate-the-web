@@ -6,6 +6,7 @@
 //! `skateHost.progress(done, total, label)`
 //! `skateHost.stage(label)`
 //! `skateHost.ready()`
+//! `skateHost.takeMusicCommand() / musicStatus(title, paused, available)`
 //! `skateHost.fatal(message)`
 //! `skateHost.netOpen() / netClose() / netSend(frame) / netText(text) / netPoll() / netBacklog()`
 //!   (multiplayer relay socket, see web/net.js)
@@ -56,6 +57,10 @@ extern "C" {
     pub fn set_mobile(on: bool);
     #[wasm_bindgen(js_namespace = skateHost, js_name = setTrackpad)]
     pub fn set_trackpad(level: u32, playing: bool);
+    #[wasm_bindgen(js_namespace = skateHost, js_name = takeMusicCommand)]
+    pub fn take_music_command() -> String;
+    #[wasm_bindgen(js_namespace = skateHost, js_name = musicStatus)]
+    pub fn music_status(title: &str, paused: bool, available: bool);
     #[wasm_bindgen(js_namespace = skateHost, js_name = fatal)]
     fn js_fatal(message: &str);
     #[wasm_bindgen(js_namespace = skateHost, js_name = netOpen)]

@@ -10,6 +10,33 @@ const BUILD = new URL(import.meta.url).search;
 const $ = (id) => document.getElementById(id);
 let frontend = null;
 const params = new URLSearchParams(location.search);
+const musicCommands = [];
+const musicState = { title: '', paused: false, available: false };
+
+function refreshMusicPlayer() {
+  $('music-player').hidden = !gameShown() || !musicState.available;
+}
+
+function musicStatus(title, paused, available) {
+  musicState.title = title;
+  musicState.paused = paused;
+  musicState.available = available;
+  const label = title === 'title' ? 'Title screen' : title.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
+  $('music-track').textContent = label;
+  const toggle = $('music-toggle');
+  toggle.textContent = paused ? '▶' : 'Ⅱ';
+  toggle.title = paused ? 'Resume music' : 'Pause music';
+  toggle.setAttribute('aria-label', toggle.title);
+  refreshMusicPlayer();
+}
+
+function queueMusicCommand(command) {
+  musicCommands.push(command);
+}
+
+$('music-previous').addEventListener('click', () => queueMusicCommand('previous'));
+$('music-toggle').addEventListener('click', () => queueMusicCommand('toggle'));
+$('music-next').addEventListener('click', () => queueMusicCommand('next'));
 
 const loading = $('loading');
 const fill = $('load-fill');
@@ -220,6 +247,7 @@ function stopTips() {
 function revealGame() {
   loading.hidden = true;
   document.body.classList.add('in-game');
+  refreshMusicPlayer();
   stopTips();
   if (watchdog) {
     clearInterval(watchdog);
@@ -446,6 +474,8 @@ window.skateHost = {
   keyboardPad,
   setTyping,
   setTrackpad,
+  takeMusicCommand: () => musicCommands.shift() || '',
+  musicStatus,
   openUrl,
   pickFile,
   takePicked: () => { const file = picked; picked = null; return file; },

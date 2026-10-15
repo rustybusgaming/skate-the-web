@@ -168,6 +168,11 @@ struct Event {
     volume: [f32; 2],
     pitch: [f32; 2],
 }
+struct Ambience {
+    generation: u64,
+    entity: Entity,
+    track: Option<usize>,
+}
 /// One material's impact: layers by strength, each a cue with random variants.
 struct Impact {
     tiers: [Vec<Layer>; 3],
@@ -287,7 +292,6 @@ pub(crate) struct GameAudio {
     body_in: f32,
     trick_seq: u32,
     bail_seq: u32,
-    maps: HashMap<String, String>,
     /// Each rolling take's beds (spawned on first use), slowest first, with
     /// their speeds; "" is the default take.
     rolling: HashMap<String, Vec<(&'static str, f32)>>,
@@ -306,8 +310,14 @@ pub(crate) struct GameAudio {
     whooshed: bool,
     flipped: bool,
     wheel_hardness: f32,
-    /// The playing background bed: (map generation, entity).
-    ambience: Option<(u64, Entity)>,
+    /// The playing background bed and the map generation / playlist slot it uses.
+    ambience: Option<Ambience>,
+    playlist: Vec<(String, String)>,
+    music_generation: Option<u64>,
+    music_index: Option<usize>,
+    music_paused: bool,
+    #[cfg(target_arch = "wasm32")]
+    reported_music: Option<(String, bool, bool)>,
 }
 
 impl GameAudio {
@@ -693,6 +703,8 @@ fn load(mut commands: Commands, config: Res<crate::config::Config>, server: Res<
         beds.insert(name, Bed { entity, spec, level: 0., target: 0., pitch: 1. });
     }
     info!("Game audio: {} events, {} beds", table.events.len(), beds.len());
+    let mut playlist: Vec<_> = table.maps.iter().map(|(name, clip)| (name.clone(), clip.clone())).collect();
+    playlist.sort_by(|a, b| a.0.cmp(&b.0));
     commands.insert_resource(GameAudio {
         events,
         beds,
@@ -706,7 +718,6 @@ fn load(mut commands: Commands, config: Res<crate::config::Config>, server: Res<
         body_in: 0.,
         trick_seq: 0,
         bail_seq: 0,
-        maps: table.maps.clone(),
         rolling: HashMap::new(),
         rolling_spec,
         rolling_take: (String::new(), 1.),
@@ -721,6 +732,12 @@ fn load(mut commands: Commands, config: Res<crate::config::Config>, server: Res<
         flipped: false,
         wheel_hardness: 1.,
         ambience: None,
+        playlist,
+        music_generation: None,
+        music_index: None,
+        music_paused: false,
+        #[cfg(target_arch = "wasm32")]
+        reported_music: None,
     });
 }
 
@@ -1049,29 +1066,70 @@ fn ambience(
     // The title's own track plays over the front end; generation u64::MAX
     // stands for it.
     let generation = if front.active() { u64::MAX } else { map.generation };
-    if audio.ambience.is_some_and(|(playing, _)| playing == generation) {
-        return;
-    }
-    if let Some((_, old)) = audio.ambience.take() {
-        commands.entity(old).try_despawn();
-    }
     let stem = if front.active() {
         "title".to_string()
     } else {
         map.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
     };
-    let Some(clip) = audio.maps.get(&stem).cloned() else {
-        audio.ambience = Some((generation, Entity::PLACEHOLDER));
-        return;
-    };
-    let entity = commands
-        .spawn((
-            AudioPlayer::new(server.load::<AudioSource>(format!("private/audio/{clip}"))),
-            PlaybackSettings { volume: Volume::Linear(0.), ..PlaybackSettings::LOOP },
-            Name::new("Sound bed: ambience"),
-        ))
-        .id();
-    audio.ambience = Some((generation, entity));
+    if audio.music_generation != Some(generation) {
+        audio.music_generation = Some(generation);
+        audio.music_index = audio.playlist.iter().position(|(name, _)| name.eq_ignore_ascii_case(&stem));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    loop {
+        match crate::web::take_music_command().as_str() {
+            "toggle" => audio.music_paused = !audio.music_paused,
+            "next" if !audio.playlist.is_empty() => {
+                let len = audio.playlist.len();
+                audio.music_index = Some(audio.music_index.unwrap_or(len - 1).wrapping_add(1) % len);
+            }
+            "previous" if !audio.playlist.is_empty() => {
+                let len = audio.playlist.len();
+                audio.music_index = Some(audio.music_index.unwrap_or(0).wrapping_add(len - 1) % len);
+            }
+            "" => break,
+            _ => {}
+        }
+    }
+
+    let track = audio.music_index.filter(|index| *index < audio.playlist.len());
+    if !audio
+        .ambience
+        .as_ref()
+        .is_some_and(|playing| playing.generation == generation && playing.track == track)
+    {
+        if let Some(old) = audio.ambience.take() {
+            commands.entity(old.entity).try_despawn();
+        }
+        let clip = track.and_then(|index| audio.playlist.get(index)).map(|(_, clip)| clip.clone());
+        audio.ambience = Some(match clip {
+            Some(clip) => {
+                let entity = commands
+                    .spawn((
+                        AudioPlayer::new(server.load::<AudioSource>(format!("private/audio/{clip}"))),
+                        PlaybackSettings { volume: Volume::Linear(0.), ..PlaybackSettings::LOOP },
+                        Name::new("Sound bed: ambience"),
+                    ))
+                    .id();
+                Ambience { generation, entity, track }
+            }
+            None => Ambience { generation, entity: Entity::PLACEHOLDER, track: None },
+        });
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let title = track
+            .and_then(|index| audio.playlist.get(index))
+            .map_or("", |(name, _)| name.as_str());
+        let available = track.is_some();
+        let status = (title.to_owned(), audio.music_paused, available);
+        if audio.reported_music.as_ref() != Some(&status) {
+            crate::web::music_status(title, audio.music_paused, available);
+            audio.reported_music = Some(status);
+        }
+    }
 }
 
 fn play_queued(mut commands: Commands, mut queue: ResMut<SoundQueue>, audio: Option<ResMut<GameAudio>>) {
@@ -1100,11 +1158,16 @@ fn mix(
     let master = audio.master;
     let paused = virtual_time.is_paused();
     let blend = 1. - (-time.delta_secs() / 0.08).exp();
-    if let Some((_, entity)) = audio.ambience {
-        if let Ok(mut sink) = sinks.get_mut(entity) {
+    if let Some(ambience) = &audio.ambience {
+        if let Ok(mut sink) = sinks.get_mut(ambience.entity) {
             let level = sink.volume().to_linear();
             let target = AMBIENCE_LEVEL * master * if paused { 0.5 } else { 1. };
             sink.set_volume(Volume::Linear(level + (target - level) * (1. - (-time.delta_secs() / 1.2).exp())));
+            if audio.music_paused {
+                sink.pause();
+            } else if sink.is_paused() {
+                sink.play();
+            }
         }
     }
     for bed in audio.beds.values_mut() {
