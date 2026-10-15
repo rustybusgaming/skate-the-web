@@ -87,6 +87,10 @@ installed asset directory. `scripts/Build-Release.ps1` builds the portable Windo
 package and requires Python 3.13. GitHub Actions builds `main` automatically;
 numbered releases are published separately.
 
+For slow gameplay on a low-end PC, choose the **Low-end PC** preset in Graphics.
+It lowers render scale, world texture quality and shadows, and caps the frame
+rate at 60; reload the map to apply the texture change.
+
 Custom animations and climbing support remain available, but no custom clips
 are shipped. The included format-demo map is original procedural content.
 

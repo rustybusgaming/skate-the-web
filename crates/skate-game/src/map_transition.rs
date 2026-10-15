@@ -220,9 +220,7 @@ fn prepare(inputs: Inputs, stage: Arc<AtomicU8>) -> Result<PreparedWorld, String
             let rendering = std::thread::Builder::new().name("map-render-loader".into())
                 .spawn_scoped(scope, || {
                     let render_started = Instant::now();
-                    let pixels: Option<crate::retail_render::TexturePixels<'static>> =
-                        map.as_mut().map(crate::retail_render::TexturePixels::taken);
-                    scene.prepare(map.as_ref(), pixels, &root);
+                    scene.prepare(map.as_ref(), None, &root);
                     render_started.elapsed()
                 }).map_err(|e| format!("Could not start render loader: {e}"))?;
             let simulation_started = Instant::now();
@@ -241,10 +239,13 @@ fn prepare(inputs: Inputs, stage: Arc<AtomicU8>) -> Result<PreparedWorld, String
     let (physics, skater, controls, camera, simulation_time, render_time) = {
         let simulation_started = Instant::now();
         let (physics, skater, controls, camera) = simulate(&stage)?;
+        drop(simulate);
         let simulation_time = simulation_started.elapsed();
         stage.store(3, Ordering::Relaxed);
         let render_started = Instant::now();
-        scene.prepare(map.as_ref(), None, &root);
+        let pixels: Option<crate::retail_render::TexturePixels<'static>> =
+            map.as_mut().map(crate::retail_render::TexturePixels::taken);
+        scene.prepare(map.as_ref(), pixels, &root);
         (physics, skater, controls, camera, simulation_time, render_started.elapsed())
     };
     eprintln!("MAP_LOAD_TIMING name={:?} read_ms={} validation_ms={} simulation_ms={} render_ms={} prepare_ms={}",

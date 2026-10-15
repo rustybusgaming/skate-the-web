@@ -54,6 +54,7 @@ pub(crate) enum GraphicsField {
     ShowFps,
     /// Off / On: Lite graphics plus the memory savers (see `mobile`).
     MobileMode,
+    PerformancePreset,
 }
 
 /// Mobile mode's graphics: what a phone's browser can hold.
@@ -112,6 +113,28 @@ impl Default for GraphicsSettings {
     }
 }
 impl GraphicsSettings {
+    fn performance_preset(&self) -> usize {
+        if self.texture_quality == 3
+            && self.shadows == 0
+            && self.anti_aliasing == 0
+            && self.scale == 50
+            && self.fps == 60
+            && !self.vsync
+        {
+            2
+        } else if self.texture_quality == 0
+            && self.shadows == 2
+            && self.anti_aliasing == 0
+            && self.scale == 100
+            && self.fps == 0
+            && !self.vsync
+        {
+            1
+        } else {
+            0
+        }
+    }
+
     fn validated(mut self) -> Self {
         self.ambient_level = self.ambient_level.map(|level| level.min(100));
         self.hour = if self.hour.is_finite() { self.hour.rem_euclid(24.) } else { 12. };
@@ -389,6 +412,23 @@ impl Menu {
                 #[cfg(target_arch = "wasm32")]
                 crate::web::set_mobile(s.mobile);
                 self.status = "Mobile mode: textures change the next time a map loads.".into();
+            }
+            GraphicsField::PerformancePreset => {
+                if value == 0 {
+                    self.status = "Custom graphics settings kept.".into();
+                } else {
+                    let low_end = value == 2;
+                    (s.texture_quality, s.shadows, s.anti_aliasing, s.scale) =
+                        if low_end { (3, 0, 0, 50) } else { (0, 2, 0, 100) };
+                    s.fps = if low_end { 60 } else { 0 };
+                    s.vsync = false;
+                    TEXTURE_QUALITY.store(s.texture_quality, std::sync::atomic::Ordering::Relaxed);
+                    self.status = if low_end {
+                        "Low-end PC preset applied. Render scale and frame limit apply now; reload the map for texture quality.".into()
+                    } else {
+                        "Balanced preset applied. Reload the map to restore full texture quality.".into()
+                    };
+                }
             }
         }
         let save = (|| -> Result<(), String> {
@@ -686,6 +726,10 @@ impl Menu {
         // GRAPHICS: every option defaults to the original look.
         let size = (s.width, s.height);
         let mut options = Vec::new();
+        options.push(row("Performance Preset", "settings",
+            "Balanced restores the original graphics. Low-end PC lowers resolution, textures and shadows for smoother play; reload the map to apply textures.",
+            graphics(GraphicsField::PerformancePreset),
+            vec!["Custom".into(), "Balanced".into(), "Low-end PC".into()], s.performance_preset()));
         if !web {
             let resolution = RESOLUTIONS.iter().position(|r| *r == size).unwrap_or(0);
             options.push(row("Resolution", "settings", "Window size. Auto fits your screen.",
@@ -2006,6 +2050,33 @@ mod tests {
             serde_json::from_str(r#"{"width":0,"height":999999,"scale":0,"fps":1}"#)
                 .unwrap();
         assert_eq!(settings.validated(), GraphicsSettings::default());
+    }
+    #[test]
+    fn performance_preset_marks_custom_and_builtin_settings() {
+        let balanced = GraphicsSettings {
+            texture_quality: 0,
+            shadows: 2,
+            anti_aliasing: 0,
+            scale: 100,
+            fps: 0,
+            vsync: false,
+            ..GraphicsSettings::default()
+        };
+        assert_eq!(balanced.performance_preset(), 1);
+        let low_end = GraphicsSettings {
+            texture_quality: 3,
+            shadows: 0,
+            anti_aliasing: 0,
+            scale: 50,
+            fps: 60,
+            vsync: false,
+            ..GraphicsSettings::default()
+        };
+        assert_eq!(low_end.performance_preset(), 2);
+        assert_eq!(
+            GraphicsSettings { scale: 75, ..balanced }.performance_preset(),
+            0
+        );
     }
     #[test]
     fn scaled_target_and_cycle_boundaries() {
