@@ -113,6 +113,44 @@ impl Default for GraphicsSettings {
     }
 }
 impl GraphicsSettings {
+    // Browser defaults apply only when this browser has no saved graphics file.
+    fn for_browser(browser: crate::config::BrowserProfile) -> Self {
+        let mut settings = Self::default();
+        match browser {
+            crate::config::BrowserProfile::Firefox => {
+                settings.texture_quality = 1;
+                settings.shadows = 1;
+                settings.scale = 85;
+                settings.fps = 60;
+            }
+            crate::config::BrowserProfile::Safari => {
+                settings.texture_quality = 2;
+                settings.shadows = 0;
+                settings.scale = 75;
+                settings.fps = 60;
+            }
+            crate::config::BrowserProfile::Edge
+            | crate::config::BrowserProfile::Chromium
+            | crate::config::BrowserProfile::Other => {}
+        }
+        settings
+    }
+
+    fn load(path: &std::path::Path, browser: crate::config::BrowserProfile) -> Self {
+        match skate_data::vfs::read(path) {
+            Ok(bytes) => serde_json::from_slice::<Self>(&bytes).unwrap_or_else(|error| {
+                warn!("Graphics settings: {error}");
+                Self::for_browser(browser)
+            }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::for_browser(browser),
+            Err(error) => {
+                warn!("Could not read graphics settings {}: {error}", path.display());
+                Self::for_browser(browser)
+            }
+        }
+    }
+}
+impl GraphicsSettings {
     fn performance_preset(&self) -> usize {
         if self.texture_quality == 3
             && self.shadows == 0
@@ -1026,9 +1064,7 @@ impl Plugin for GraphicsMenuPlugin {
         // saved texture quality now so the first map uses it.
         if let Some(config) = app.world().get_resource::<crate::config::Config>() {
             let path = config.asset_root.parent().unwrap_or(&config.asset_root).join("settings/graphics.json");
-            let settings = skate_data::vfs::read(&path).ok()
-                .and_then(|b| serde_json::from_slice::<GraphicsSettings>(&b).ok())
-                .unwrap_or_default();
+            let settings = GraphicsSettings::load(&path, config.browser);
             // A first start in mobile mode builds the first map with its textures.
             let quality = if config.mobile && !settings.mobile { MOBILE_PRESET.0 } else { settings.validated().texture_quality };
             TEXTURE_QUALITY.store(quality, std::sync::atomic::Ordering::Relaxed);
@@ -1061,14 +1097,7 @@ fn setup(
         .parent()
         .unwrap_or(&config.asset_root)
         .join("settings/graphics.json");
-    let settings = match skate_data::vfs::read(&path) {
-        Ok(bytes) => serde_json::from_slice::<GraphicsSettings>(&bytes).unwrap_or_else(|e| {
-            warn!("Graphics settings: {e}");
-            GraphicsSettings::default()
-        }),
-        Err(_) => GraphicsSettings::default(),
-    }
-    .validated();
+    let settings = GraphicsSettings::load(&path, config.browser).validated();
     // In a browser the page decides (phones and tablets start in mobile mode;
     // the choice is kept there); natively, --mobile turns it on.
     let mut settings = settings;
@@ -2056,6 +2085,17 @@ mod tests {
             serde_json::from_str(r#"{"width":0,"height":999999,"scale":0,"fps":1}"#)
                 .unwrap();
         assert_eq!(settings.validated(), GraphicsSettings::default());
+    }
+    #[test]
+    fn browser_defaults_are_conservative_and_keep_edge_balanced() {
+        let firefox = GraphicsSettings::for_browser(crate::config::BrowserProfile::Firefox);
+        assert_eq!((firefox.texture_quality, firefox.shadows, firefox.scale, firefox.fps), (1, 1, 85, 60));
+
+        let safari = GraphicsSettings::for_browser(crate::config::BrowserProfile::Safari);
+        assert_eq!((safari.texture_quality, safari.shadows, safari.scale, safari.fps), (2, 0, 75, 60));
+
+        let edge = GraphicsSettings::for_browser(crate::config::BrowserProfile::Edge);
+        assert_eq!(edge, GraphicsSettings::default());
     }
     #[test]
     fn performance_preset_marks_custom_and_builtin_settings() {

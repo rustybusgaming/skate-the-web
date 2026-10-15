@@ -102,6 +102,7 @@ pub(super) struct BootConfig {
     pub teleport: Option<String>,
     pub front_end: bool,
     pub mobile: bool,
+    pub browser: crate::config::BrowserProfile,
     pub declared: Vec<String>,
 }
 
@@ -122,6 +123,13 @@ pub(super) async fn boot_config() -> Result<BootConfig, String> {
         teleport: text(&object, "teleport"),
         front_end: Reflect::get(&object, &JsValue::from_str("frontEnd")).ok().and_then(|v| v.as_bool()).unwrap_or(false),
         mobile: Reflect::get(&object, &JsValue::from_str("mobile")).ok().and_then(|v| v.as_bool()).unwrap_or(false),
+        browser: match text(&object, "browser").as_deref() {
+            Some("firefox") => crate::config::BrowserProfile::Firefox,
+            Some("edge") => crate::config::BrowserProfile::Edge,
+            Some("safari") => crate::config::BrowserProfile::Safari,
+            Some("chromium") => crate::config::BrowserProfile::Chromium,
+            _ => crate::config::BrowserProfile::Other,
+        },
         declared: Reflect::get(&object, &JsValue::from_str("declared"))
             .ok()
             .filter(|v| v.is_object())

@@ -159,6 +159,7 @@ pub(super) async fn boot() -> Result<(), String> {
         teleport: boot.teleport.clone(),
         front_end: boot.front_end,
         mobile: boot.mobile,
+        browser: boot.browser,
     };
     skate_data::input_config::StockGameplayConfig::load(&asset_root).map_err(|e| e.to_string())?;
     host::stage("Reading game data…");

@@ -2,6 +2,16 @@ use bevy::prelude::Resource;
 use std::path::PathBuf;
 use web_time::Instant;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum BrowserProfile {
+    Firefox,
+    Edge,
+    Safari,
+    Chromium,
+    #[default]
+    Other,
+}
+
 #[derive(Resource)]
 pub(crate) struct Config {
     pub asset_root: PathBuf,
@@ -18,6 +28,8 @@ pub(crate) struct Config {
     pub front_end: bool,
     /// Mobile mode: phones and tablets (the page decides), or --mobile.
     pub mobile: bool,
+    /// Browser family, used only for first-run web graphics defaults.
+    pub browser: BrowserProfile,
 }
 
 impl Config {
@@ -35,6 +47,7 @@ impl Config {
             teleport: None,
             front_end: false,
             mobile: false,
+            browser: BrowserProfile::Other,
         };
         let mut difficulty_override = None;
         let mut explicit_map = false;

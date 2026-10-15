@@ -937,6 +937,15 @@ export async function readFile(path) {
 /// The fixture map the client ships in dist/. Not part of a converted install.
 export const demoMap = 'maps/format-demo.skate';
 
+export function browserFamily() {
+  const agent = navigator.userAgent;
+  if (/Edg(?:A|iOS)?\//.test(agent)) return 'edge';
+  if (/Firefox\/|FxiOS\//.test(agent)) return 'firefox';
+  if (/(Chrome|Chromium|CriOS|OPR|Opera)\//.test(agent)) return 'chromium';
+  if (/Safari\//.test(agent)) return 'safari';
+  return 'other';
+}
+
 export async function installSummary() {
   let base = origin();
   try {
@@ -977,6 +986,7 @@ export async function bootConfig(map, difficulty, capture = false, teleport = nu
     // Start at Skate 3's title and main menu rather than in a world.
     frontEnd: Boolean(frontEnd),
     mobile: mobileMode(),
+    browser: browserFamily(),
     map,
     difficulty: difficulty || null,
     capture,

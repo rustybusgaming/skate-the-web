@@ -306,12 +306,26 @@ function engineFailure(event) {
 // navigator.gpu even in a browser that supports it.
 function webgpuProblem() {
   if (!window.isSecureContext) {
+    const browser = store.browserFamily();
+    if (browser === 'firefox' || browser === 'safari') {
+      return `WebGPU requires https or localhost, but this page was opened as ${location.origin}. Open the game through a secure https address.`;
+    }
     return `WebGPU only works over https or on localhost, and this page was opened as ${location.origin}. ` +
       `On this machine, open Chrome/Edge/Brave at chrome://flags/#unsafely-treat-insecure-origin-as-secure, ` +
       `add ${location.origin}, enable it, relaunch the browser and reload this page.`;
   }
   if (!navigator.gpu) {
-    return 'WebGPU is not available in this browser. Use a current Chrome, Edge or Brave, and check that hardware acceleration is on.';
+    const browser = store.browserFamily();
+    if (browser === 'firefox') {
+      return 'Firefox did not expose WebGPU to this page. Update Firefox, enable "Use hardware acceleration when available" in Settings > General > Performance, restart Firefox, and check about:support for graphics issues.';
+    }
+    if (browser === 'safari') {
+      return 'This Safari/WebKit version did not expose WebGPU. Update Safari and macOS/iOS, then check that the device supports hardware-accelerated WebGPU.';
+    }
+    if (browser === 'edge') {
+      return 'Edge did not expose WebGPU. Update Edge, enable "Use graphics acceleration when available" in Settings > System and performance, relaunch, and check edge://gpu.';
+    }
+    return 'WebGPU is not available in this browser. Update the browser and graphics drivers, enable hardware acceleration, and reload the page.';
   }
   return '';
 }
