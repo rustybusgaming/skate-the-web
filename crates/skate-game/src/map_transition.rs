@@ -198,6 +198,9 @@ fn prepare(inputs: Inputs, stage: Arc<AtomicU8>) -> Result<PreparedWorld, String
     let validation_time = validation_started.elapsed();
     let metadata = CurrentMap::from_package(selected.path, map.as_ref());
     let retail = map.as_ref().is_some_and(|m| crate::retail_render::RetailScene::for_map(m));
+    #[cfg(target_arch = "wasm32")]
+    let mut map = map;
+
     let simulate = |stage: &AtomicU8| -> Result<_, String> {
         stage.store(1, Ordering::Relaxed);
         let physics = info_span!("load_physics").in_scope(|| GamePhysics::load_with_difficulty(&root, map.as_ref(), difficulty))?;
@@ -217,7 +220,9 @@ fn prepare(inputs: Inputs, stage: Arc<AtomicU8>) -> Result<PreparedWorld, String
             let rendering = std::thread::Builder::new().name("map-render-loader".into())
                 .spawn_scoped(scope, || {
                     let render_started = Instant::now();
-                    scene.prepare(map.as_ref(), None, &root);
+                    let pixels: Option<crate::retail_render::TexturePixels<'static>> =
+                        map.as_mut().map(crate::retail_render::TexturePixels::taken);
+                    scene.prepare(map.as_ref(), pixels, &root);
                     render_started.elapsed()
                 }).map_err(|e| format!("Could not start render loader: {e}"))?;
             let simulation_started = Instant::now();

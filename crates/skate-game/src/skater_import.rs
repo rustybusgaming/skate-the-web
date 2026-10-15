@@ -31,6 +31,24 @@ pub(crate) struct Imported {
     pub missing: usize,
 }
 
+fn infer_gender(cas: &Cas, library: &Library) -> Option<String> {
+    let gender_for = |slot: &Slot| {
+        library
+            .models
+            .get(&slot.asset)
+            .filter(|part| part.slot == slot.slot)
+            .map(|part| part.flag("Gender"))
+            .filter(|gender| *gender == "male" || *gender == "female")
+            .map(str::to_owned)
+    };
+
+    cas.slots
+        .iter()
+        .find(|slot| slot.slot == "Rostral")
+        .and_then(gender_for)
+        .or_else(|| cas.slots.iter().find_map(gender_for))
+}
+
 /// Read a `.cfss` and build a customiser profile from it on top of the
 /// library's defaults for the skater's gender.
 pub(crate) fn import(bytes: &[u8], library: &Library) -> Result<Imported, String> {
@@ -43,14 +61,7 @@ pub(crate) fn import(bytes: &[u8], library: &Library) -> Result<Imported, String
         .unwrap_or_else(|| "Imported skater".into());
     let cas = parse_cas(save)?;
 
-    let gender = cas
-        .slots
-        .iter()
-        .find(|s| s.slot == "Rostral")
-        .and_then(|s| library.models.get(&s.asset))
-        .map(|p| p.flag("Gender").to_owned())
-        .filter(|g| g == "male" || g == "female")
-        .unwrap_or_else(|| "male".into());
+    let gender = infer_gender(&cas, library).unwrap_or_else(|| "male".into());
     let mut profile = library.defaults.get(&gender).cloned().ok_or("The character library has no default skater")?;
     profile["gender"] = json!(gender);
 
@@ -161,7 +172,7 @@ fn zip_entries(bytes: &[u8]) -> Result<Vec<(String, Vec<u8>)>, String> {
     let end = (search_from..bytes.len().saturating_sub(21))
         .rev()
         .find(|&i| bytes[i..i + 4] == [0x50, 0x4b, 0x05, 0x06])
-        .ok_or("Not a .cfss file (no zip directory)")?;
+        .ok_or("This is not a valid Skate 3 .cfss save. Choose a shared-skater .cfss file.")?;
     let count = le16(bytes, end + 10)?;
     let mut at = le32(bytes, end + 16)?;
     let mut out = Vec::new();
@@ -545,6 +556,54 @@ mod tests {
         let raw = b"{\"title\":\"a\",\"desc\":\"one\ntwo\"}";
         let v: Value = serde_json::from_slice(&sanitize_json(raw)).unwrap();
         assert_eq!(v["desc"], "one\ntwo");
+    }
+
+    #[test]
+    fn non_cfss_file_suggests_choosing_a_shared_skater_save() {
+        let error = import(b"not a file", &Library::default())
+            .err()
+            .expect("invalid input should fail");
+        assert_eq!(
+            error,
+            "This is not a valid Skate 3 .cfss save. Choose a shared-skater .cfss file."
+        );
+    }
+
+    #[test]
+    fn gender_falls_back_to_another_known_slot_when_head_is_missing() {
+        let part = |slot: &str, gender: &str| crate::customiser_parts::Part {
+            slot: slot.into(),
+            name: String::new(),
+            flags: [("Gender".into(), gender.into())].into(),
+            materials: Vec::new(),
+            scene: String::new(),
+        };
+        let library = Library {
+            models: [
+                ("female_head".into(), part("Rostral", "female")),
+                ("female_top".into(), part("OuterTorso", "female")),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let cas = Cas {
+            slots: vec![
+                Slot {
+                    slot: "Rostral".into(),
+                    asset: "not_in_library".into(),
+                    material: String::new(),
+                },
+                Slot {
+                    slot: "OuterTorso".into(),
+                    asset: "female_top".into(),
+                    material: String::new(),
+                },
+            ],
+            colours: Vec::new(),
+            morphs: Vec::new(),
+        };
+
+        assert_eq!(infer_gender(&cas, &library).as_deref(), Some("female"));
     }
 
     /// A shared skater, when one is given (SKATE_CFSS=<path>), against the

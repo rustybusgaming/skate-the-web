@@ -672,9 +672,9 @@ impl Menu {
         let mut display_rows = Vec::new();
         player_category.entries.insert(0, row("Trick Guide", "extras", "Every trick in the game and how to do it.",
             CrossBarAction::TrickGuide, vec![], 0));
+        player_category.entries.insert(0, row("Controls", "settings", "Keyboard, trackpad and controller layout.",
+            CrossBarAction::Controls, vec![], 0));
         if web {
-            player_category.entries.insert(0, row("Controls", "settings", "Keyboard, trackpad and controller layout.",
-                CrossBarAction::Controls, vec![], 0));
             player_category.entries.push(row("Trackpad Mode", "settings",
                 "Mouse or trackpad flicks tricks. Click the game to lock the pointer.",
                 pick(PlayerField::Trackpad), vec!["Off".into(), "Low".into(), "Medium".into(), "High".into()], usize::from(player.trackpad)));
@@ -698,7 +698,7 @@ impl Menu {
         options.push(row("Render Scale", "settings", "Internal resolution. Lower is faster; 100% is the original sharpness.",
             CrossBarAction::Pick { page: Page::Section(2), row: 1, current: index(SCALES, s.scale) },
             SCALES.iter().map(|v| format!("{v}%")).collect(), index(SCALES, s.scale)));
-        options.push(row("Texture Quality", "settings", "World texture resolution. High is the original; lower saves a lot of memory. Applies when a map loads.",
+        options.push(row("Texture Quality", "settings", "World texture resolution. High is the original; lower saves VRAM at the cost of detail. Applies when a map loads.",
             graphics(GraphicsField::TextureQuality),
             vec!["High".into(), "Medium".into(), "Low".into(), "Lowest".into()], s.texture_quality as usize));
         options.push(row("Shadows", "view", "Shadow detail from the sun and your skater. Medium is the original.",

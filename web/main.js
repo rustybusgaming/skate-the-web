@@ -428,13 +428,21 @@ function openUrl(url) {
 // A file the player gives the game (a shared skater, .cfss): read here in the
 // page and handed to the engine; it is never uploaded anywhere.
 let picked = null;
+async function readPickedFile(file) {
+  picked = null;
+  try {
+    picked = new Uint8Array(await file.arrayBuffer());
+  } catch {
+    window.alert(`Could not read "${file.name}". Check that the file is available, then choose it again.`);
+  }
+}
 function pickFile(accept) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept;
   input.addEventListener('change', async () => {
     const file = input.files && input.files[0];
-    if (file) picked = new Uint8Array(await file.arrayBuffer());
+    if (file) await readPickedFile(file);
   });
   input.click();
 }
@@ -443,9 +451,13 @@ window.addEventListener('dragover', (event) => {
 });
 window.addEventListener('drop', async (event) => {
   const file = event.dataTransfer && event.dataTransfer.files[0];
-  if (!file || !/\.cfss$/i.test(file.name)) return;
+  if (!file) return;
   event.preventDefault();
-  picked = new Uint8Array(await file.arrayBuffer());
+  if (!/\.cfss$/i.test(file.name)) {
+    window.alert('Only shared-skater .cfss files can be imported. Choose a .cfss file and try again.');
+    return;
+  }
+  await readPickedFile(file);
 });
 
 // Phones and tablets (as the front end decides for Lite mode).

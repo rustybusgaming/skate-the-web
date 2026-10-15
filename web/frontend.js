@@ -918,12 +918,13 @@ export function createFrontend({ store, start, gpuProblem }) {
     await pack;
     await refreshSaved();
     if (summary.error) {
-      // A pack the browser cannot read is a hosting setting, not a missing
-      // server: say what failed rather than suggesting SERVE.bat.
-      pendingError ||= /did not answer/i.test(summary.error)
-        ? summary.error.replace(/^Game data pack \S+: /, '')
+      const detail = summary.error.replace(/^Game data pack \S+: /, '');
+      pendingError ||= /did not answer/i.test(detail)
+        ? detail
+        : /browser could not reach|CORS|range requests/i.test(detail)
+        ? `${detail}\n\nCheck that the pack host allows this site (CORS) and supports byte-range requests.`
         : /pack/i.test(summary.error)
-        ? `${summary.error}\n\nThe game server is fine; the host of the game data zip has to allow this site (CORS) before browsers can read it.`
+        ? `${detail}\n\nCheck the configured game-data ZIP URL and HTTP response. The ZIP must be a valid converted game-data pack.`
         : `${serverLine()}\n\n${summary.error}\n\nStart SERVE.bat on the machine that holds your converted copy and open the address it prints, or set the server under ONLINE > Game Server.`;
     }
     try {
