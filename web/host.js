@@ -370,7 +370,11 @@ async function packUrl() {
   const chosen = (localStorage.getItem(PACK_KEY) || '').trim();
   if (chosen) return { url: chosen, fallback: false };
   try {
-    const response = await fetch(`${origin()}/config.json`, { cache: 'no-cache' });
+    const server = origin();
+    const configUrl = server === location.origin
+      ? new URL('config.json', import.meta.url)
+      : `${server}/config.json`;
+    const response = await fetch(configUrl, { cache: 'no-cache' });
     if (!response.ok) return null;
     const config = await response.json();
     return typeof config.pack === 'string' && config.pack ? { url: config.pack, fallback: Boolean(config.fallback) } : null;

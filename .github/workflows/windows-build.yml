@@ -36,8 +36,12 @@ jobs:
       - name: Install LLVM
         shell: powershell
         run: |
-          choco install -y llvm --version=18.1.8 --no-progress
-          if ($LASTEXITCODE -ne 0) { throw "LLVM install failed" }
+          $readobj = Join-Path $env:ProgramFiles 'LLVM/bin/llvm-readobj.exe'
+          if (-not (Test-Path -LiteralPath $readobj)) {
+            choco install -y llvm --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "LLVM install failed" }
+          }
+          if (-not (Test-Path -LiteralPath $readobj)) { throw "LLVM llvm-readobj.exe was not found" }
 
       - name: Add LLVM to PATH
         shell: bash

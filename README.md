@@ -58,6 +58,20 @@ the `data` folder beside your executable. Each freshly unpacked copy runs its
 own setup; it does not adopt another installation. In-place updates refresh
 only changed asset groups.
 
+### Browser build
+
+The **Deploy web to GitHub Pages** workflow publishes the browser client from
+`main` (or on manual dispatch). In repository Settings > Pages, choose **GitHub
+Actions** as the source. The page contains the client only; it does not upload
+or include Skate 3 game data.
+
+To have the page load your own converted game-data ZIP, set the repository
+Actions variable `SKATE_CLIENT_PACK_URL` to its public HTTPS URL. The ZIP host
+must allow browser CORS requests and byte-range reads. This URL is embedded in
+the public Pages site, so do not put credentials or private tokens in it. With
+the variable unset, the client can still be pointed at a game-data server or a
+ZIP URL from the page's game-server settings.
+
 ## Build
 
 Requires Windows, Rust with the MSVC toolchain, and LLVM installed in its default

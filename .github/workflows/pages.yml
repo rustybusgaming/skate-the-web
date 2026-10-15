@@ -1,0 +1,75 @@
+name: Deploy web to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Install Rust and WebAssembly target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target-wasm
+          shared-key: web-wasm
+
+      - name: Install wasm-bindgen CLI
+        shell: bash
+        run: |
+          if ! command -v wasm-bindgen >/dev/null 2>&1; then
+            cargo install wasm-bindgen-cli --version 0.2.127 --locked
+          fi
+
+      - name: Install Binaryen
+        run: sudo apt-get update && sudo apt-get install --yes binaryen
+
+      - name: Build browser client
+        shell: pwsh
+        run: ./scripts/build-web.ps1 -Profile web
+
+      - name: Configure optional game-data pack
+        if: ${{ vars.SKATE_CLIENT_PACK_URL != '' }}
+        env:
+          SKATE_CLIENT_PACK_URL: ${{ vars.SKATE_CLIENT_PACK_URL }}
+        shell: bash
+        run: |
+          node -e 'require("fs").writeFileSync("dist/config.json", JSON.stringify({ pack: process.env.SKATE_CLIENT_PACK_URL, fallback: false }) + "\n")'
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
