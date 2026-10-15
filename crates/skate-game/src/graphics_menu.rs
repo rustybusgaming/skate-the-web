@@ -1131,7 +1131,13 @@ fn setup(
     let data = skate_data::collections::Collections::load(&config.asset_root).expect("validated startup collections");
     let custom_defaults = Tuning::defaults(&data).expect("validated Easy difficulty");
     let custom = Tuning::load(&config.asset_root, &data).expect("validated Custom difficulty");
-    let maps = crate::map_library::discover(&config.asset_root);
+    let maps = crate::map_library::discover(&config.asset_root).unwrap_or_else(|error| {
+        warn!("Map discovery failed: {error}");
+        vec![crate::map_library::Entry {
+            label: "Test world".into(),
+            path: None,
+        }]
+    });
     let destinations = crate::teleport_menu::load(&config.asset_root).unwrap_or_else(|e| { warn!("Map destinations: {e}"); Vec::new() });
     commands.spawn((MenuRoot, MenuLayoutRoot, UiTargetCamera(output), GlobalZIndex(10), Node {
         display: Display::None, width:percent(100), height:percent(100), align_items:AlignItems::Center,

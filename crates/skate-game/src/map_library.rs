@@ -32,28 +32,36 @@ fn world_name(stem: &str) -> String {
     .into()
 }
 
-pub(crate) fn discover(assets: &Path) -> Vec<Entry> {
+pub(crate) fn discover(assets: &Path) -> Result<Vec<Entry>, String> {
     let mut maps = Vec::new();
     let root = assets.parent().unwrap_or(assets).join("maps");
-    for directory in [&root, &root.join("private")] {
-        if let Ok(entries) = skate_data::vfs::read_dir(directory) {
-            for entry in entries {
-                let path = entry.path();
-                if skate_data::vfs::is_file(&path)
-                    && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("skate"))
-                    && !hidden(&path)
-                {
-                    maps.push(Entry {
-                        label: world_name(&path.file_stem().unwrap().to_string_lossy()),
-                        path: Some(path.canonicalize().unwrap_or(path)),
-                    });
-                }
+    let private = root.join("private");
+    let mut directories = vec![
+        skate_data::vfs::read_dir(&root)
+            .map_err(|e| format!("{}: {e}", root.display()))?,
+    ];
+    match skate_data::vfs::read_dir(&private) {
+        Ok(entries) => directories.push(entries),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("{}: {error}", private.display())),
+    }
+    for entries in directories {
+        for entry in entries {
+            let path = entry.path();
+            if skate_data::vfs::is_file(&path)
+                && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("skate"))
+                && !hidden(&path)
+            {
+                maps.push(Entry {
+                    label: world_name(&path.file_stem().unwrap().to_string_lossy()),
+                    path: Some(path.canonicalize().unwrap_or(path)),
+                });
             }
         }
     }
     maps.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
     maps.insert(0, Entry { label: "Test world".into(), path: None });
-    maps
+    Ok(maps)
 }
 
 pub(crate) fn default_map(assets: &Path) -> Result<Option<PathBuf>, String> {
@@ -95,6 +103,14 @@ mod tests {
     #[test]
     fn hawaiian_dream_map_has_a_friendly_menu_name() {
         assert_eq!(world_name("HawaiianDream"), "Hawaiian Dream");
+    }
+
+    #[test]
+    fn discovery_reports_a_missing_maps_directory() {
+        let assets = std::env::temp_dir()
+            .join(format!("skate-map-discovery-{}", std::process::id()))
+            .join("assets");
+        assert!(discover(&assets).is_err());
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use bevy::prelude::Resource;
 use std::path::PathBuf;
+use web_time::Instant;
 
 #[derive(Resource)]
 pub(crate) struct Config {
@@ -70,7 +71,9 @@ impl Config {
                 }
                 Some("--map") => {
                     let path = PathBuf::from(args.next().ok_or("--map requires a .skate file")?);
-                    config.map = Some(skate_data::skate_map::SkateMap::load(&path)?);
+                    let (map, fingerprint) = load_map(&path)?;
+                    config.map = Some(map);
+                    config.map_fingerprint = fingerprint;
                     config.map_path = Some(path.canonicalize().map_err(|e| e.to_string())?);
                     explicit_map = true;
                 }
@@ -108,11 +111,15 @@ impl Config {
         };
         if !explicit_map {
             if let Some(path) = crate::map_library::default_map(&config.asset_root)? {
-                config.map = Some(skate_data::skate_map::SkateMap::load(&path)?);
+                let (map, fingerprint) = load_map(&path)?;
+                config.map = Some(map);
+                config.map_fingerprint = fingerprint;
                 config.map_path = Some(path.canonicalize().map_err(|e| e.to_string())?);
             }
         }
-        config.map_fingerprint = map_fingerprint(config.map_path.as_deref())?;
+        if config.map_path.is_none() {
+            config.map_fingerprint = map_fingerprint(None)?;
+        }
         if config.multiplayer.direct.is_some() && config.multiplayer.session==0 {return Err("Direct multiplayer requires --net-session (a nonzero number shared by both players)".into());}
         if let Some(id) = &config.teleport {
             let destinations = crate::teleport_menu::load(&config.asset_root)?;
@@ -138,13 +145,39 @@ impl Config {
     }
 }
 
+pub(crate) fn load_map(
+    path: &std::path::Path,
+) -> Result<(skate_data::skate_map::SkateMap, u64), String> {
+    let started = Instant::now();
+    let data = skate_data::vfs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let disk = started.elapsed();
+    let parse_started = Instant::now();
+    let map = skate_data::skate_map::SkateMap::parse(&data)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let fingerprint = fingerprint_bytes(&data);
+    eprintln!(
+        "MAP_READ_TIMING name={:?} disk_ms={} parse_ms={} file_bytes={}",
+        map.name,
+        disk.as_millis(),
+        parse_started.elapsed().as_millis(),
+        data.len()
+    );
+    Ok((map, fingerprint))
+}
+
+pub(crate) fn fingerprint_bytes(data: &[u8]) -> u64 {
+    data.iter().fold(0xcbf29ce484222325u64, |hash, b| {
+        (hash ^ u64::from(*b)).wrapping_mul(0x100000001b3)
+    })
+}
+
 /// Hash map bytes identically for startup and background map replacement.
 pub(crate) fn map_fingerprint(path: Option<&std::path::Path>) -> Result<u64, String> {
     // The browser has no files: hash the mounted bytes the same way.
     #[cfg(target_arch = "wasm32")]
     if let Some(path) = path {
         let bytes = skate_data::vfs::read(path).map_err(|e| e.to_string())?;
-        return Ok(bytes.iter().fold(0xcbf29ce484222325u64, |hash, b| (hash ^ u64::from(*b)).wrapping_mul(0x100000001b3)));
+        return Ok(fingerprint_bytes(&bytes));
     }
     Ok(if let Some(path)=path {
             use std::io::Read;

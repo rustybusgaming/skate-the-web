@@ -43,7 +43,7 @@ fn installed_worlds_prepare_commit_and_retire_without_simulation() {
     let character = world.spawn((crate::world::PlayerRoot, Transform::default())).id();
     let mut initial = PreparedScene::new(&world);
     initial.prepare(None, None, &root);
-    initial.publish(&mut world);
+    initial.publish(&mut world).unwrap();
     let procedural_meshes = world.resource::<Assets<Mesh>>().len();
     let procedural_entities = world.query_filtered::<Entity, With<crate::map_render::MapEntity>>().iter(&world).count();
 
@@ -62,7 +62,7 @@ fn installed_worlds_prepare_commit_and_retire_without_simulation() {
         let spawn = prepared.metadata.spawn;
         assert!(Arc::ptr_eq(&prepared.skater.animation.source, &source));
         assert!(Arc::ptr_eq(&prepared.skater.animation.evaluator, &evaluator));
-        commit(&mut world, prepared);
+        commit(&mut world, prepared).unwrap();
         assert!(old.into_iter().all(|id| world.get_entity(id).is_err()));
         assert!(world.get_entity(character).is_ok());
         assert_eq!(world.resource::<CurrentMap>().generation, iteration as u64 + 1);

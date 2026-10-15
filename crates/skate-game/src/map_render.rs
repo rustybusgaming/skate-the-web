@@ -51,20 +51,21 @@ impl<A: Asset> StagedAssets<A> {
         }
     }
 
-    fn publish(&mut self, world: &mut World) {
+    fn publish(&mut self, world: &mut World) -> Result<(), String> {
         let mut assets = world.resource_mut::<Assets<A>>();
         for (handle, asset) in self.pending.drain(..) {
-            self.owned.push(handle.id());
             // The handle came from this same provider moments ago, so a stale
             // generation would mean the reservation logic is broken, not that a
             // map failed to load. Say so rather than dropping geometry silently.
-            if let Err(error) = assets.insert(handle.id(), asset) {
-                error!(
+            assets.insert(handle.id(), asset).map_err(|error| {
+                format!(
                     "staged {} asset rejected on publish: {error}",
                     std::any::type_name::<A>()
-                );
-            }
+                )
+            })?;
+            self.owned.push(handle.id());
         }
+        Ok(())
     }
 }
 
@@ -206,15 +207,32 @@ impl PreparedScene {
         }
     }
 
-    /// Main-thread commit. Assets first, then entities: a spawned entity must
-    /// never reference a handle whose asset has not been inserted yet.
-    pub(crate) fn publish(&mut self, world: &mut World) {
-        self.meshes.publish(world);
-        self.images.publish(world);
-        self.standard.publish(world);
-        self.world_materials.publish(world);
-        self.sky.publish(world);
-        self.params.publish(world);
+    /// Insert staged assets before retiring the live scene, so an invariant
+    /// failure leaves the current world intact.
+    pub(crate) fn publish_assets(&mut self, world: &mut World) -> Result<(), String> {
+        let result = (|| {
+            self.meshes.publish(world)?;
+            self.images.publish(world)?;
+            self.standard.publish(world)?;
+            self.world_materials.publish(world)?;
+            self.sky.publish(world)?;
+            self.params.publish(world)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            self.meshes.release(world);
+            self.images.release(world);
+            self.standard.release(world);
+            self.world_materials.release(world);
+            self.sky.release(world);
+            self.params.release(world);
+        }
+        result
+    }
+
+    /// Complete the commit after assets are published and the previous scene
+    /// has been retired.
+    pub(crate) fn publish_entities(&mut self, world: &mut World) {
         std::mem::take(&mut self.commands.queue).apply(world);
         world.insert_resource(MapAssets {
             groups: vec![
@@ -226,6 +244,13 @@ impl PreparedScene {
                 Box::new(std::mem::replace(&mut self.params, StagedAssets::new(world))),
             ],
         });
+    }
+
+    /// Publish a standalone scene, as at startup.
+    pub(crate) fn publish(&mut self, world: &mut World) -> Result<(), String> {
+        self.publish_assets(world)?;
+        self.publish_entities(world);
+        Ok(())
     }
 }
 

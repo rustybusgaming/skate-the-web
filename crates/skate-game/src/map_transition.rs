@@ -272,11 +272,11 @@ fn read_map(path: &std::path::Path) -> Result<(skate_data::skate_map::SkateMap, 
     #[cfg(target_arch = "wasm32")]
     {
         let bytes = skate_data::vfs::take(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let fingerprint = bytes.iter().fold(0xcbf29ce484222325u64, |hash, b| (hash ^ u64::from(*b)).wrapping_mul(0x100000001b3));
+        let fingerprint = crate::config::fingerprint_bytes(&bytes);
         Ok((skate_data::skate_map::SkateMap::parse_deferred(bytes)?, fingerprint))
     }
     #[cfg(not(target_arch = "wasm32"))]
-    Ok((skate_data::skate_map::SkateMap::load(path)?, crate::config::map_fingerprint(Some(path))?))
+    crate::config::load_map(path)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -360,13 +360,20 @@ fn poll(world: &mut World) {
         }
         Phase::Loading { job, .. } => match job.join() {
             Ok(prepared) => {
-                let mut notice = commit(world, prepared);
-                let config = world.resource::<Config>();
-                match crate::map_library::save_default(&config.asset_root, config.map_path.as_deref()) {
-                    Ok(()) => notice.push_str(" Default map saved."),
-                    Err(error) => notice.push_str(&format!(" Could not save default: {error}")),
+                match commit(world, prepared) {
+                    Ok(mut notice) => {
+                        let config = world.resource::<Config>();
+                        match crate::map_library::save_default(&config.asset_root, config.map_path.as_deref()) {
+                            Ok(()) => notice.push_str(" Default map saved."),
+                            Err(error) => notice.push_str(&format!(" Could not save default: {error}")),
+                        }
+                        Phase::Publishing { frames: 3, notice }
+                    }
+                    Err(error) => {
+                        failed(world, error);
+                        Phase::Idle
+                    }
                 }
-                Phase::Publishing { frames: 3, notice }
             }
             Err(error) => { failed(world, error); Phase::Idle }
         },
@@ -387,13 +394,14 @@ fn failed(world: &mut World, error: String) {
         .transition_finished(format!("Could not load map: {error}\nPrevious world retained. Choose another map or Resume."), false);
 }
 
-fn commit(world: &mut World, mut prepared: PreparedWorld) -> String {
+fn commit(world: &mut World, mut prepared: PreparedWorld) -> Result<String, String> {
     let publication_started = Instant::now();
     prepared.metadata.generation = world.resource::<CurrentMap>().generation + 1;
     // All fallible decoding/validation/construction finished before this point.
     // No simulation system can observe a mixture of the two worlds.
+    prepared.scene.publish_assets(world)?;
     crate::map_render::MapAssets::retire(world);
-    prepared.scene.publish(world);
+    prepared.scene.publish_entities(world);
     crate::camera::set_world_environment(world, prepared.retail);
     world.insert_resource(crate::retail_render::RetailScene(prepared.retail));
     world.insert_resource(crate::grind_world::GrindGeometry::for_world(prepared.metadata.path.is_none()));
@@ -426,5 +434,5 @@ fn commit(world: &mut World, mut prepared: PreparedWorld) -> String {
     }
     world.insert_resource(prepared.metadata);
     eprintln!("MAP_PUBLISH_TIMING cpu_ms={}", publication_started.elapsed().as_millis());
-    notice
+    Ok(notice)
 }

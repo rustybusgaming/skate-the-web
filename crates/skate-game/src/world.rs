@@ -35,7 +35,9 @@ fn spawn(world: &mut World) {
     // what the pixels held instead of growing the heap past it.
     let pixels = map.as_mut().map(crate::retail_render::TexturePixels::taken);
     prepared.prepare(map.as_ref(), pixels, &root);
-    prepared.publish(world);
+    prepared
+        .publish(world)
+        .unwrap_or_else(|error| panic!("Could not publish initial world: {error}"));
 }
 
 pub(crate) fn spawn_test_world(
