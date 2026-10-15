@@ -159,7 +159,7 @@ impl Plugin for MapTransitionPlugin {
     }
 }
 
-/// What a world build needs from the live session, taken before it starts.
+/// What a world's download is going, taken before it starts.
 struct Inputs {
     root: PathBuf,
     difficulty: crate::difficulty::Difficulty,
@@ -201,11 +201,19 @@ fn prepare(inputs: Inputs, stage: Arc<AtomicU8>) -> Result<PreparedWorld, String
     #[cfg(target_arch = "wasm32")]
     let mut map = map;
 
+    // Clone the Arc to avoid moving the captured source out of the closure.
+    let source_for_simulation = source.clone();
     let simulate = |stage: &AtomicU8| -> Result<_, String> {
         stage.store(1, Ordering::Relaxed);
         let physics = info_span!("load_physics").in_scope(|| GamePhysics::load_with_difficulty(&root, map.as_ref(), difficulty))?;
         stage.store(2, Ordering::Relaxed);
-        let skater = SkaterRuntime::load_for_world(&root, &graphs, &physics, difficulty.profile_key(), Some(source))?;
+        let skater = SkaterRuntime::load_for_world(
+            &root,
+            &graphs,
+            &physics,
+            difficulty.profile_key(),
+            Some(source_for_simulation.clone()),
+        )?;
         let mut controls = PlayerControls::load(&root)?;
         controls.preferences = preferences;
         let camera = crate::camera::CameraRuntime::load(&root)?;
