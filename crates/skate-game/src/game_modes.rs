@@ -246,19 +246,11 @@ impl Challenge {
         }
         self.scoring_boundary.as_ref().is_none_or(|v| v.contains(p))
     }
-    /// The challenge area (data/boundary): leave it and you are brought back.
-    fn in_area(&self, p: Vec3) -> bool {
-        let Some(poly) = self.boundary.as_ref().filter(|b| b.len() >= 3) else { return true };
-        let mut inside = false;
-        let mut j = poly.len() - 1;
-        for i in 0..poly.len() {
-            let ([xi, zi], [xj, zj]) = (poly[i], poly[j]);
-            if (zi > p.z) != (zj > p.z) && p.x < (xj - xi) * (p.z - zi) / (zj - zi) + xi {
-                inside = !inside;
-            }
-            j = i;
-        }
-        inside
+    /// The challenge area (data/boundary) is intentionally not enforced for
+    /// free-flight play: staying on a challenge's authored area should not
+    /// forcibly teleport players back when they leave it.
+    fn in_area(&self, _p: Vec3) -> bool {
+        true
     }
 }
 
@@ -1291,38 +1283,6 @@ fn play(
     // The active player's turn.
     if me_active && round.state == State::Running && !modes.mine.done {
         play_turn(&mut modes, &challenge, &round, &skater, output, position, dt, &mut sounds);
-        if modes.outside_for > challenge.number("OutOfBoundsTime", 5.) && !modes.mine.done {
-            modes.outside_for = 0.;
-            match round.kind {
-                // S.K.A.T.E.: leaving the area fails the attempt.
-                Kind::Skate => {
-                    modes.mine.fail = Some(Fail::LeftArea);
-                    modes.mine.done = true;
-                }
-                // Deathrace: back on the path at the last gate, facing the next.
-                Kind::Deathrace => {
-                    let (gates, _) = challenge.gates();
-                    let g = modes.mine.gate as usize;
-                    let at = g.checked_sub(1).and_then(|i| gates.get(i)).and_then(|v| v.floor());
-                    let to = gates.get(g).and_then(|v| v.center).map(Vec3::from_array);
-                    let matrix = match (at, to) {
-                        (Some(at), Some(to)) => Some(facing(at, to)),
-                        _ => challenge.spawn(round.round).and_then(Place::transform),
-                    };
-                    if let Some(m) = matrix {
-                        let _ = skater.place(m);
-                    }
-                    let text = modes.strings.get("ID_CHALLENGE_RACE_OFFPATH");
-                    modes.say_coloured(text, 2.5, 1);
-                }
-                // Out of the area too long: back to the start of the turn.
-                _ => {
-                    if let Some(m) = challenge.spawn(round.round).and_then(Place::transform) {
-                        let _ = skater.place(m);
-                    }
-                }
-            }
-        }
     }
     // Domination: a new leader is announced.
     if round.kind == Kind::Domination && round.state == State::Running && round.players.len() > 1 {
@@ -1431,7 +1391,11 @@ fn play_turn(
 ) {
     let kind = round.kind;
     modes.turn_left -= dt;
-    modes.outside_for = if challenge.in_area(position) { 0. } else { modes.outside_for + dt };
+    modes.outside_for = if matches!(kind, Kind::Skate | Kind::Deathrace) && !challenge.in_area(position) {
+        modes.outside_for + dt
+    } else {
+        0.
+    };
     // A sequence that began (or passed) inside the spot still scores if it
     // leaves it (the game's ForceEnableScoring).
     if skater.scoring.sequence_active() && challenge.in_spot(position) {
@@ -2028,9 +1992,6 @@ impl GameModes {
                 // 1-Up: the DPO panel instead (below).
                 Kind::OneUp => vec![],
             };
-            if self.outside_for > 0. {
-                view.objectives.push(Objective { state: Goal::Fail, title: "ID_CHALLENGE_CENTRAL_MESSAGE_OBJECTIVE_RETURNTOCHAL".into(), value: String::new() });
-            }
         }
         // As in Skate 3: sessions show the leaderboard, solo the objectives.
         if round.players.len() > 1 {
