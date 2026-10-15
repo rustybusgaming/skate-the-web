@@ -31,8 +31,11 @@ class AssetVersions(unittest.TestCase):
     def test_equivalences_only_accept_exact_old_and_new_pair(self):
         migrations=json.loads(Path(v.__file__).with_name('pipeline-equivalence.json').read_text())
         # Equivalences describe historical pairs, not every future exporter.
-        current={g:migrations[g][0][1] for g in v.GROUPS}
-        old={g:migrations[g][0][0] for g in v.GROUPS}
+        # Some groups (for example, audio) may not be listed in the equivalence
+        # ledger even though they are still tracked in GROUPS.
+        groups=sorted(set(v.GROUPS) & set(migrations))
+        current={g:migrations[g][0][1] for g in groups}
+        old={g:migrations[g][0][0] for g in groups}
         self.assertEqual(v.changed_groups(old,current),set())
         changed={**current,'maps':'future-exporter'}
         self.assertEqual(v.changed_groups(old,changed),{'maps'})

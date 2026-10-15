@@ -56,11 +56,16 @@ def fingerprints(tools=None):
 def changed_groups(previous, current):
     migrations = Path(__file__).with_name('pipeline-equivalence.json')
     equivalent = json.loads(migrations.read_text()) if migrations.is_file() else {}
-    changed = {name for name in GROUPS if previous.get(name) != current[name]
-               and [previous.get(name), current[name]] not in equivalent.get(name, [])}
+    known = set(GROUPS) & set(previous) & set(current)
+    changed = {
+        name
+        for name in known
+        if previous.get(name) != current[name]
+        and [previous.get(name), current[name]] not in equivalent.get(name, [])
+    }
     # Other exports consume the core VLT/skeleton/animation data.
     if 'core' in changed:
-        changed.update(GROUPS)
+        changed.update(known)
     return changed
 
 
